@@ -1,0 +1,253 @@
+#include "Slave1.h"
+
+//variables
+USERS user_type;
+uint8_t ID;
+PCK_CONV Send_pck;
+PCK_CONV Received_pck;
+uint8_t PCK_RCV;
+PCK_STATE pck_state;
+LED_HANDLER led_green;
+LED_HANDLER led_red;
+
+// functions
+
+void Slave_Init(uint8_t room,USERS u){
+	user_type=u;
+	if(u==SLAVE1_DOOR)ID=room<<4;
+	else if(u==SLAVE1_WC)ID=(room<<4)+7;
+	
+	set_call(Send_pck.DIST_PCK.State,0);
+	set_req(Send_pck.DIST_PCK.State,0);
+	set_slamp(Send_pck.DIST_PCK.State,0);
+	set_lamp(Send_pck.DIST_PCK.State,0);
+	set_slave1(Send_pck.DIST_PCK.State,0);
+	set_user(Send_pck.DIST_PCK.State,u);
+	
+	
+	pck_state=PCK_WAIT;
+	Init_PCK(0,0,0);
+	PCK_RCV=0;
+	
+	led_red.counter=0;
+	led_red.state=LED_OFF;
+	
+	led_green.counter=0;
+	led_green.state=LED_OFF;
+	
+}
+
+PCK_STATE GetNewData(uint8_t data){
+	
+	switch(PCK_RCV)
+	{
+	
+	case 0:
+		if (data == START_BYTE0)
+		{
+			PCK_RCV++;
+			Received_pck.ASS_PCK[PCK_RCV]=data;
+		}
+		else {
+			PCK_RCV=0;
+			return PCK_Unknown;
+		}
+		break;
+	
+	case 1:
+		if (data == START_BYTE1)
+		{
+			PCK_RCV++;
+			Received_pck.ASS_PCK[PCK_RCV]=data;
+		}
+		else
+		{
+			PCK_RCV = 0;
+			return PCK_Unknown;
+		}
+		break;
+	
+	case 2:
+		Received_pck.ASS_PCK[PCK_RCV] = data;
+		Received_pck.DIST_PCK.cksum = data;
+		PCK_RCV++;
+		break;
+	
+	case 3:
+	case 4:
+	case 5:
+	case 6:
+	case 7:
+		Received_pck.ASS_PCK[PCK_RCV] = data;
+		Received_pck.DIST_PCK.cksum+= data;
+		PCK_RCV++;
+		break;
+		
+	case 8:
+		if((Received_pck.DIST_PCK.cksum-data) == 0) PCK_RCV++;
+		else {
+			PCK_RCV = 0;
+			return PCK_Unknown;
+		}
+		break;
+	
+	case 9:
+		PCK_RCV=0;
+		if (data == STOP_BYTE) return Check_PCK();
+		return PCK_Unknown;
+	}
+	return PCK_WAIT;
+}
+
+//change state by order of master
+PCK_STATE Check_PCK(void){
+}
+
+void Init_PCK(uint8_t data1,uint8_t data2,uint8_t data3){
+	Send_pck.DIST_PCK.addr=ID;
+	Send_pck.DIST_PCK.func=SLAVE1_HELLO;
+	Send_pck.DIST_PCK.Sensor1=0;
+	Send_pck.DIST_PCK.Sensor2=0;
+	Send_pck.DIST_PCK.Sensor3=0;
+	Send_pck.DIST_PCK.ST0=START_BYTE0;
+	Send_pck.DIST_PCK.ST0=START_BYTE1;
+	Send_pck.DIST_PCK.stp=STOP_BYTE;
+	
+	int a=SLAVE1_HELLO+ID+data1+data2+data3;
+	
+	Send_pck.DIST_PCK.cksum=a%256;
+}
+
+//void Init_PCK(PCK_CONV * pck,uint8_t address,FUNCTION function,uint8_t data1,uint8_t data2,uint8_t data3,uint8_t data4){
+//	pck->DIST_PCK.ST0=START_BYTE0;
+//	pck->DIST_PCK.ST1=START_BYTE1;
+//	pck->DIST_PCK.func=function;
+//	pck->DIST_PCK.addr=address;
+//	pck->DIST_PCK.data1=data1;
+//	pck->DIST_PCK.data2=data2;
+//	pck->DIST_PCK.data3=data3;
+//	pck->DIST_PCK.data4=data4;
+//	
+//	int a=function+address+data1+data2+data3+data4;
+//	
+//	pck->DIST_PCK.cksum=a%256;
+//	pck->DIST_PCK.stp=STOP_BYTE;
+//}
+
+//PCK_STATE GetNewData(uint8_t data){
+//	
+//	switch(PCK_RCV)
+//	{
+//	
+//	case 0:
+//		if (data == START_BYTE0)
+//		{
+//			PCK_RCV++;
+//			Received_pck.ASS_PCK[PCK_RCV]=data;
+//		}
+//		else {
+//			PCK_RCV=0;
+//			return PCK_Unknown;
+//		}
+//		break;
+//	
+//	case 1:
+//		if (data == START_BYTE1)
+//		{
+//			PCK_RCV++;
+//			Received_pck.ASS_PCK[PCK_RCV]=data;
+//		}
+//		else
+//		{
+//			PCK_RCV = 0;
+//			return PCK_Unknown;
+//		}
+//		break;
+//	
+//	case 2:
+//		Received_pck.ASS_PCK[PCK_RCV] = data;
+//		Received_pck.DIST_PCK.cksum = data;
+//		PCK_RCV++;
+//		break;
+//	
+//	case 3:
+//	case 4:
+//	case 5:
+//	case 6:
+//	case 7:
+//		Received_pck.ASS_PCK[PCK_RCV] = data;
+//		Received_pck.DIST_PCK.cksum+= data;
+//		PCK_RCV++;
+//		break;
+//		
+//	case 8:
+//		if((Received_pck.DIST_PCK.cksum-data) == 0) PCK_RCV++;
+//		else {
+//			PCK_RCV = 0;
+//			return PCK_Unknown;
+//		}
+//		break;
+//	
+//	case 9:
+//		PCK_RCV=0;
+//		if (data == STOP_BYTE) return Check_PCK(Received_pck.ASS_PCK);
+//		return PCK_Unknown;
+//	}
+//	return PCK_WAIT;
+//}
+
+//PCK_STATE Check_PCK(uint8_t * buff){
+//	
+//	if(Received_pck.DIST_PCK.addr==slave.id){
+//		if(buff[3]==Speak_req)return PCK_REQ_ME;
+//		else if(buff[3]==Normal_conv) return PCK_With_Me;
+//	}
+//	else if(Received_pck.DIST_PCK.addr==spy_slave.id){// && Received_pck.DIST_PCK.data1==200 && Received_pck.DIST_PCK.data2==200 && Received_pck.DIST_PCK.data3==200 && spy_slave.pck.DIST_PCK.data4==200){
+//		
+//		//HAL_GPIO_TogglePin(GPIOC,GPIO_PIN_13);
+//		
+//		spy_slave.pck.DIST_PCK.cksum=Received_pck.DIST_PCK.cksum;
+//		spy_slave.pck.DIST_PCK.func=Received_pck.DIST_PCK.func;
+//		spy_slave.pck.DIST_PCK.data1=Received_pck.DIST_PCK.data1;
+//		spy_slave.pck.DIST_PCK.data2=Received_pck.DIST_PCK.data2;
+//		spy_slave.pck.DIST_PCK.data3=Received_pck.DIST_PCK.data3;
+//		spy_slave.pck.DIST_PCK.data4=Received_pck.DIST_PCK.data4;
+//		spy_slave.pck.DIST_PCK.addr=Received_pck.DIST_PCK.addr;
+//		spy_slave.pck.DIST_PCK.ST0=Received_pck.DIST_PCK.ST0;
+//		spy_slave.pck.DIST_PCK.ST1=Received_pck.DIST_PCK.ST1;
+//		spy_slave.pck.DIST_PCK.stp=Received_pck.DIST_PCK.stp;
+//		
+//		return PCK_With_Spyed;
+//	}
+//	else return PCK_Without_Me;
+//}
+
+//HAL_StatusTypeDef Send_PCK(FUNCTION function,uint8_t data1,uint8_t data2,uint8_t data3,uint8_t data4){//,int timeout){
+//	Init_PCK(&Send_pck,slave.id,function,data1,data2,data3,data4);
+//		
+//	HAL_GPIO_WritePin(RS485_GPIO_PORT,RS485_GPIO_PIN,GPIO_PIN_SET);
+//	uint8_t out= HAL_UART_Transmit_DMA(&Slave_Uart,Send_pck.ASS_PCK,Packet_Length);
+
+//	return out;
+//}
+
+//uint8_t Send_Audio(uint8_t * audio,int audio_size){//,int timeout){
+//	
+//	HAL_GPIO_WritePin(RS485_GPIO_PORT,RS485_GPIO_PIN,GPIO_PIN_SET);
+//	uint8_t out= HAL_UART_Transmit_DMA(&Slave_Uart,audio,audio_size);
+
+//	return out;
+//}
+
+//void Set_Address(uint8_t add){
+//	slave.id=add;
+//}
+
+//void Spy_Slave_Init(uint8_t add){
+//	spy_slave.id=add;
+//	spy_slave.state=WAITING_PCK;
+//	Init_PCK(&spy_slave.pck,add,0,0,0,0,0);
+//	
+//	//spy_slave.speak_flag=FLAG_DISABLE;
+//}
+
